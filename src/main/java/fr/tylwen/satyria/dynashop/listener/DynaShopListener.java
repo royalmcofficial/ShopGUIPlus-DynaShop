@@ -137,14 +137,14 @@ public class DynaShopListener implements Listener {
         if (price == null) {
             return;
         }
-        
+
         DynaShopType typeDynaShop = price.getDynaShopType();
-        
+
         // Vérification de stock pour les items en mode STOCK
         if (checkStockLimits(event, typeDynaShop, price, shopID, itemID, amount)) {
             return; // Transaction annulée en raison des limites de stock
         }
-        
+
         // Vérification du stock pour les items de type RECIPE
         if (checkRecipeStockLimits(event, typeDynaShop, shopID, itemID, amount)) {
             return; // Transaction annulée en raison des limites de stock pour les recettes
