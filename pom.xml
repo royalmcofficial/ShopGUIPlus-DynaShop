@@ -7,7 +7,7 @@
 
 	<groupId>fr.tylwen.satyria.dynashop</groupId>
 	<artifactId>ShopGUIPlus-DynaShop</artifactId>
-	<version>1.8.0</version>
+	<version>1.8.0-SNAPSHOT</version>
 
 	<properties>
         <dynashop.version>${project.version}</dynashop.version>
@@ -130,6 +130,14 @@
             </plugin>
         </plugins>
     </build>
+
+    <distributionManagement>
+        <repository>
+            <id>github</id>
+            <name>GitHub Packages</name>
+            <url>https://maven.pkg.github.com/royalmcofficial/ShopGUIPlus-DynaShop</url>
+        </repository>
+    </distributionManagement>
 
     <repositories>
         <repository>
