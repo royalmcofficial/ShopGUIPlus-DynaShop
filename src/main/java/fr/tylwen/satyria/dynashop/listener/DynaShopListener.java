@@ -98,7 +98,17 @@ public class DynaShopListener implements Listener {
     }
     
     // ============= ÉVÉNEMENTS =============
-    
+
+    /**
+     * Un item est géré par DynaShop s'il déclare un type général (typeDynaShop) ou un type par côté
+     * (dynaShop.buyType / dynaShop.sellType). Ne tester que typeDynaShop laissait ShopGUI+ facturer
+     * les items configurés uniquement par côté, au prix du lot au lieu du prix à l'unité.
+     */
+    private boolean isDynaShopItem(String shopID, String itemID) {
+        return shopConfigManager.getTypeDynaShop(shopID, itemID, "buy") != DynaShopType.NONE
+            || shopConfigManager.getTypeDynaShop(shopID, itemID, "sell") != DynaShopType.NONE;
+    }
+
     /**
      * Événement déclenché avant une transaction de shop.
      */
@@ -118,7 +128,7 @@ public class DynaShopListener implements Listener {
         }
 
         // Vérifier si l'item est configuré pour DynaShop
-        if (!shopConfigManager.getItemValue(shopID, itemID, "typeDynaShop", String.class).isPresent()) {
+        if (!isDynaShopItem(shopID, itemID)) {
             return;
         }
 
@@ -487,7 +497,7 @@ public class DynaShopListener implements Listener {
      * Traite la transaction de manière asynchrone
      */
     private void processTransactionAsync(String shopID, String itemID, ItemStack itemStack, int amount, ShopAction action) {
-        if (!shopConfigManager.getItemValue(shopID, itemID, "typeDynaShop", String.class).isPresent()) {
+        if (!isDynaShopItem(shopID, itemID)) {
             return;
         }
 
@@ -1364,7 +1374,8 @@ public class DynaShopListener implements Listener {
         // Charger les données supplémentaires depuis les fichiers de configuration
         ItemPriceData priceData = shopConfigManager.getItemAllValues(shopID, itemID);
         
-        params.buyPrice = priceFromDatabase.map(DynamicPrice::getBuyPrice).orElse(priceData.buyPrice.orElse(-1.0));
+        params.buyPrice = priceFromDatabase.map(DynamicPrice::getBuyPrice).filter(stored -> stored > 0)
+            .orElse(priceData.buyPrice.orElse(-1.0));
         // params.minBuy = priceData.minBuy.orElse(params.buyPrice);
         // params.maxBuy = priceData.maxBuy.orElse(params.buyPrice);
 
@@ -1449,7 +1460,8 @@ public class DynaShopListener implements Listener {
         // Charger les données supplémentaires depuis les fichiers de configuration
         ItemPriceData priceData = shopConfigManager.getItemAllValues(shopID, itemID);
 
-        params.sellPrice = priceFromDatabase.map(DynamicPrice::getSellPrice).orElse(priceData.sellPrice.orElse(-1.0));
+        params.sellPrice = priceFromDatabase.map(DynamicPrice::getSellPrice).filter(stored -> stored > 0)
+            .orElse(priceData.sellPrice.orElse(-1.0));
         // params.minSell = priceData.minSell.orElse(params.sellPrice);
         // params.maxSell = priceData.maxSell.orElse(params.sellPrice);
 

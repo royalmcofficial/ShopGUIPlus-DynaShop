@@ -631,10 +631,18 @@ public class FlatFileStorageManager implements StorageManager {
                     existingPrice.getStockModifier()
                 );
                 
-                // Préserver les informations de type
-                newPrice.setDynaShopType(existingPrice.getDynaShopType());
-                newPrice.setBuyTypeDynaShop(existingPrice.getBuyTypeDynaShop());
-                newPrice.setSellTypeDynaShop(existingPrice.getSellTypeDynaShop());
+                // Préserver les informations de type, mais réparer une entrée sans type : une entrée
+                // écrite en NONE le resterait indéfiniment, alors que la config fait foi.
+                DynaShopType storedType = existingPrice.getDynaShopType();
+                DynaShopType storedBuyType = existingPrice.getBuyTypeDynaShop();
+                DynaShopType storedSellType = existingPrice.getSellTypeDynaShop();
+
+                newPrice.setDynaShopType(storedType == null || storedType == DynaShopType.NONE
+                    ? plugin.getShopConfigManager().getTypeDynaShop(shopId, itemId) : storedType);
+                newPrice.setBuyTypeDynaShop(storedBuyType == null || storedBuyType == DynaShopType.NONE
+                    ? plugin.getShopConfigManager().resolveTypeDynaShop(shopId, itemId, true) : storedBuyType);
+                newPrice.setSellTypeDynaShop(storedSellType == null || storedSellType == DynaShopType.NONE
+                    ? plugin.getShopConfigManager().resolveTypeDynaShop(shopId, itemId, false) : storedSellType);
                 
                 // plugin.getLogger().info("Prix mis à jour pour " + shopId + ":" + itemId + " de type " + existingPrice.getDynaShopType());
             }
