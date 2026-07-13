@@ -22,6 +22,7 @@ import fr.tylwen.satyria.dynashop.data.param.DynaShopType;
 import fr.tylwen.satyria.dynashop.price.DynamicPrice;
 import net.brcdev.shopgui.ShopGuiPlusApi;
 
+import java.math.RoundingMode;
 import java.text.DecimalFormat;
 import java.text.DecimalFormatSymbols;
 // import java.util.ArrayList;
@@ -32,9 +33,11 @@ import java.util.Optional;
 import org.bukkit.inventory.ItemStack;
 
 public class PriceFormatter {
-    
+
+    private static final int MAX_FRACTION_DIGITS = 3;
+
     private final DynaShopPlugin plugin;
-    
+
     public PriceFormatter(DynaShopPlugin plugin) {
         this.plugin = plugin;
     }
@@ -45,7 +48,9 @@ public class PriceFormatter {
     public String formatPrice(double price) {
         try {
             // Récupérer les séparateurs depuis la configuration
-            int maximumFractionDigits = ShopGuiPlusApi.getPlugin().getConfigMain().getConfig().getInt("numberFormat.maximumFractionDigits", 8);
+            int maximumFractionDigits = Math.min(
+                ShopGuiPlusApi.getPlugin().getConfigMain().getConfig().getInt("numberFormat.maximumFractionDigits", 8),
+                MAX_FRACTION_DIGITS);
             String decimalSeparator = ShopGuiPlusApi.getPlugin().getConfigMain().getConfig().getString("numberFormat.decimalSeparator", ".");
             String groupingSeparator = ShopGuiPlusApi.getPlugin().getConfigMain().getConfig().getString("numberFormat.groupingSeparator", ",");
             int minimumFractionDigits = ShopGuiPlusApi.getPlugin().getConfigMain().getConfig().getInt("numberFormat.minimumFractionDigits", 0);
@@ -76,11 +81,12 @@ public class PriceFormatter {
             
             // Activer le regroupement des chiffres
             df.setGroupingUsed(true);
-            
+            df.setRoundingMode(RoundingMode.HALF_UP);
+
             return df.format(price);
         } catch (Exception e) {
             // En cas d'erreur, revenir à un format simple
-            return String.format("%.2f", price);
+            return String.format("%." + MAX_FRACTION_DIGITS + "f", price);
         }
     }
 
