@@ -386,11 +386,14 @@ public class ShopConfigManager {
                 // plugin.getItemDataManager().createItem(shop.getId(), item.getId());
                 // plugin.getLogger().info("Adding new item price for " + item.getId() + " in shop " + shop.getId());
                 // plugin.getItemDataManager().savePrice(shop.getId(), item.getId(), price.getBuyPrice(), price.getSellPrice());
-                if (price.getBuyPrice() > 0) {
-                    plugin.getStorageManager().saveBuyPrice(shop.getId(), item.getId(), price.getBuyPrice());
-                }
-                if (price.getSellPrice() > 0) {
-                    plugin.getStorageManager().saveSellPrice(shop.getId(), item.getId(), price.getSellPrice());
+                if (price.getBuyPrice() > 0 || price.getSellPrice() > 0) {
+                    plugin.getStorageManager().savePrice(
+                        shop.getId(),
+                        item.getId(),
+                        price.getBuyPrice(),
+                        price.getSellPrice(),
+                        price.getStock()
+                    );
                 }
                 // if ((getTypeDynaShop(shop.getId(), item.getId()) == DynaShopType.STATIC_STOCK || getTypeDynaShop(shop.getId(), item.getId()) == DynaShopType.STOCK) && price.getStock() > 0) {
                 if ((typeGeneral == DynaShopType.STATIC_STOCK || typeGeneral == DynaShopType.STOCK) && price.getStock() > 0) {
