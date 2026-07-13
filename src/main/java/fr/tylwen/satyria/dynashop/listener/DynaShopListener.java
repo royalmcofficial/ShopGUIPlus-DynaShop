@@ -193,7 +193,34 @@ public class DynaShopListener implements Listener {
         // Mise à jour des données dans le stockage
         updateStorageData(player, shopID, itemID, isBuy, amount);
     }
-    
+
+    /**
+     * Point d'entrée pour les plugins qui vendent ou achètent en dehors des GUI de ShopGUI+
+     * (ShopGUIPlus-SellGUI, par exemple) : ceux-ci ne déclenchent pas ShopPostTransactionEvent,
+     * donc sans cet appel le prix dynamique ne bougerait jamais après leurs transactions.
+     */
+    public void handleExternalTransaction(Player player, String shopID, String itemID, ItemStack itemStack,
+            int amount, ShopAction action, double resultPrice) {
+        if (shopID == null || itemID == null || itemStack == null || amount <= 0) {
+            return;
+        }
+
+        boolean isBuy = action == ShopAction.BUY;
+
+        applyTaxes(player, resultPrice, shopID, itemID, isBuy);
+        plugin.invalidatePriceCache(shopID, itemID, player);
+
+        DynaShopType typeDynaShop = shopConfigManager.resolveTypeDynaShop(shopID, itemID, isBuy);
+        handleRecipeTypeItems(shopID, itemID, typeDynaShop);
+
+        ItemStack transactionStack = itemStack.clone();
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+            processTransactionAsync(shopID, itemID, transactionStack, amount, action);
+        });
+
+        updateStorageData(player, shopID, itemID, isBuy, amount);
+    }
+
     // ============= MÉTHODES DE VÉRIFICATION =============
     
     /**
