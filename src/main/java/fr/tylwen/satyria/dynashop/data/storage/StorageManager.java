@@ -73,6 +73,17 @@ public interface StorageManager {
      * Enregistre un prix dynamique pour un item
      */
     void savePrice(String shopId, String itemId, double buyPrice, double sellPrice, int stock);
+
+    /**
+     * Synchronize explicitly configured dynamic price parameters without
+     * resetting the market's current price. Backends that do not persist these
+     * parameters, such as MySQL, can leave this as a no-op.
+     *
+     * @return true if the persisted price metadata was updated
+     */
+    default boolean synchronizePriceConfiguration(String shopId, String itemId) {
+        return false;
+    }
     
     /**
      * Enregistre uniquement le prix d'achat d'un item
