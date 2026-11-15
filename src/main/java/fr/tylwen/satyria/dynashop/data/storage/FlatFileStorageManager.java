@@ -18,6 +18,7 @@
 package fr.tylwen.satyria.dynashop.data.storage;
 
 import fr.tylwen.satyria.dynashop.DynaShopPlugin;
+import fr.tylwen.satyria.dynashop.data.ItemPriceData;
 import fr.tylwen.satyria.dynashop.data.param.DynaShopType;
 // import fr.tylwen.satyria.dynashop.data.storage.limit.TransactionDataManager;
 import fr.tylwen.satyria.dynashop.price.DynamicPrice;
@@ -575,6 +576,99 @@ public class FlatFileStorageManager implements StorageManager {
     //         }
     //     }
     // }
+
+    /**
+     * Reconcile only explicitly configured DYNAMIC price parameters. The
+     * configured buyPrice/sellPrice is the initial price, not an instruction to
+     * reset the current market price when loading an existing item.
+     */
+    private DynamicPrice withCurrentConfiguration(String shopId, String itemId,
+            DynamicPrice existing, double buyPrice, double sellPrice, int stock) {
+        ItemPriceData settings = plugin.getShopConfigManager().getItemAllValues(shopId, itemId);
+        boolean dynamicBuy = plugin.getShopConfigManager()
+                .resolveTypeDynaShop(shopId, itemId, true) == DynaShopType.DYNAMIC;
+        boolean dynamicSell = plugin.getShopConfigManager()
+                .resolveTypeDynaShop(shopId, itemId, false) == DynaShopType.DYNAMIC;
+
+        DynamicPrice updated = new DynamicPrice(
+            buyPrice, sellPrice,
+            dynamicBuy ? settings.minBuy.orElse(existing.getMinBuyPrice()) : existing.getMinBuyPrice(),
+            dynamicBuy ? settings.maxBuy.orElse(existing.getMaxBuyPrice()) : existing.getMaxBuyPrice(),
+            dynamicSell ? settings.minSell.orElse(existing.getMinSellPrice()) : existing.getMinSellPrice(),
+            dynamicSell ? settings.maxSell.orElse(existing.getMaxSellPrice()) : existing.getMaxSellPrice(),
+            dynamicBuy ? settings.growthBuy.orElse(existing.getGrowthBuy()) : existing.getGrowthBuy(),
+            dynamicBuy ? settings.decayBuy.orElse(existing.getDecayBuy()) : existing.getDecayBuy(),
+            dynamicSell ? settings.growthSell.orElse(existing.getGrowthSell()) : existing.getGrowthSell(),
+            dynamicSell ? settings.decaySell.orElse(existing.getDecaySell()) : existing.getDecaySell(),
+            stock, existing.getMinStock(), existing.getMaxStock(), existing.getStockModifier()
+        );
+
+        // Keep Vihara's missing-type repair while retaining valid saved types.
+        DynaShopType storedType = existing.getDynaShopType();
+        DynaShopType storedBuyType = existing.getBuyTypeDynaShop();
+        DynaShopType storedSellType = existing.getSellTypeDynaShop();
+        updated.setDynaShopType(storedType == null || storedType == DynaShopType.NONE
+                ? plugin.getShopConfigManager().getTypeDynaShop(shopId, itemId) : storedType);
+        updated.setBuyTypeDynaShop(storedBuyType == null || storedBuyType == DynaShopType.NONE
+                ? plugin.getShopConfigManager().resolveTypeDynaShop(shopId, itemId, true) : storedBuyType);
+        updated.setSellTypeDynaShop(storedSellType == null || storedSellType == DynaShopType.NONE
+                ? plugin.getShopConfigManager().resolveTypeDynaShop(shopId, itemId, false) : storedSellType);
+        updated.setLinked(existing.isLinked());
+        return updated;
+    }
+
+    private boolean differentPriceSettings(DynamicPrice before, DynamicPrice after) {
+        return Double.compare(before.getBuyPrice(), after.getBuyPrice()) != 0
+            || Double.compare(before.getSellPrice(), after.getSellPrice()) != 0
+            || Double.compare(before.getMinBuyPrice(), after.getMinBuyPrice()) != 0
+            || Double.compare(before.getMaxBuyPrice(), after.getMaxBuyPrice()) != 0
+            || Double.compare(before.getMinSellPrice(), after.getMinSellPrice()) != 0
+            || Double.compare(before.getMaxSellPrice(), after.getMaxSellPrice()) != 0
+            || Double.compare(before.getGrowthBuy(), after.getGrowthBuy()) != 0
+            || Double.compare(before.getDecayBuy(), after.getDecayBuy()) != 0
+            || Double.compare(before.getGrowthSell(), after.getGrowthSell()) != 0
+            || Double.compare(before.getDecaySell(), after.getDecaySell()) != 0
+            || before.getDynaShopType() != after.getDynaShopType()
+            || before.getBuyTypeDynaShop() != after.getBuyTypeDynaShop()
+            || before.getSellTypeDynaShop() != after.getSellTypeDynaShop();
+    }
+
+    /**
+     * On startup or reload, update only this item's persisted dynamic bounds
+     * and multipliers. Preserve current price when it fits inside new bounds.
+     */
+    @Override
+    public boolean synchronizePriceConfiguration(String shopId, String itemId) {
+        synchronized (this) {
+            String key = getItemKey(shopId, itemId);
+            DynamicPrice existing = priceManager.get(key);
+            if (existing == null) return false;
+
+            DynamicPrice updated = withCurrentConfiguration(shopId, itemId, existing,
+                    existing.getBuyPrice(), existing.getSellPrice(), existing.getStock());
+            if (!differentPriceSettings(existing, updated)) return false;
+
+            priceManager.set(key, updated);
+            scheduleStoredPriceSave();
+            plugin.getLogger().info("DynaShop price settings synchronized: " + key
+                    + " (current price preserved unless outside configured bounds)");
+            return true;
+        }
+    }
+
+    private void scheduleStoredPriceSave() {
+        if (!scheduledSave) {
+            scheduledSave = true;
+            Bukkit.getScheduler().runTaskLaterAsynchronously(plugin, () -> {
+                synchronized (this) {
+                    priceManager.save();
+                    stockManager.save();
+                    scheduledSave = false;
+                }
+            }, 20L);
+        }
+    }
+
     @Override
     public void savePrice(String shopId, String itemId, double buyPrice, double sellPrice, int stock) {
         final String key = getItemKey(shopId, itemId);
@@ -620,31 +714,9 @@ public class FlatFileStorageManager implements StorageManager {
                     newPrice = new DynamicPrice(buyPrice, sellPrice, stock);
                 }
             } else {
-                // Mettre à jour le prix existant tout en préservant les autres propriétés
-                newPrice = new DynamicPrice(
-                    buyPrice, sellPrice,
-                    existingPrice.getMinBuyPrice(), existingPrice.getMaxBuyPrice(),
-                    existingPrice.getMinSellPrice(), existingPrice.getMaxSellPrice(),
-                    existingPrice.getGrowthBuy(), existingPrice.getDecayBuy(),
-                    existingPrice.getGrowthSell(), existingPrice.getDecaySell(),
-                    stock, existingPrice.getMinStock(), existingPrice.getMaxStock(),
-                    existingPrice.getStockModifier()
-                );
-                
-                // Préserver les informations de type, mais réparer une entrée sans type : une entrée
-                // écrite en NONE le resterait indéfiniment, alors que la config fait foi.
-                DynaShopType storedType = existingPrice.getDynaShopType();
-                DynaShopType storedBuyType = existingPrice.getBuyTypeDynaShop();
-                DynaShopType storedSellType = existingPrice.getSellTypeDynaShop();
-
-                newPrice.setDynaShopType(storedType == null || storedType == DynaShopType.NONE
-                    ? plugin.getShopConfigManager().getTypeDynaShop(shopId, itemId) : storedType);
-                newPrice.setBuyTypeDynaShop(storedBuyType == null || storedBuyType == DynaShopType.NONE
-                    ? plugin.getShopConfigManager().resolveTypeDynaShop(shopId, itemId, true) : storedBuyType);
-                newPrice.setSellTypeDynaShop(storedSellType == null || storedSellType == DynaShopType.NONE
-                    ? plugin.getShopConfigManager().resolveTypeDynaShop(shopId, itemId, false) : storedSellType);
-                
-                // plugin.getLogger().info("Prix mis à jour pour " + shopId + ":" + itemId + " de type " + existingPrice.getDynaShopType());
+                // Keep the dynamic market price, but refresh bounds and factors from config.
+                newPrice = withCurrentConfiguration(shopId, itemId, existingPrice,
+                        buyPrice, sellPrice, stock);
             }
             
             // Sauvegarder le prix
@@ -654,16 +726,7 @@ public class FlatFileStorageManager implements StorageManager {
             stockManager.set(key, stock);
             
             // Planifier la sauvegarde
-            if (!scheduledSave) {
-                scheduledSave = true;
-                Bukkit.getScheduler().runTaskLaterAsynchronously(plugin, () -> {
-                    synchronized (this) {
-                        priceManager.save();
-                        stockManager.save();
-                        scheduledSave = false;
-                    }
-                }, 20L); // Sauvegarde après 1 seconde
-            }
+            scheduleStoredPriceSave();
         }
     }
     
