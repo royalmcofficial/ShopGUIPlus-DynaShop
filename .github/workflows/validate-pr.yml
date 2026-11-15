@@ -21,3 +21,16 @@ jobs:
           cache: maven
       - name: Compile and package (no publishing)
         run: mvn -B --no-transfer-progress -DskipTests package
+      - name: Verify and checksum staging JAR
+        run: |
+          test -s target/ShopGUIPlus-DynaShop-1.8.0-SNAPSHOT.jar
+          sha256sum target/ShopGUIPlus-DynaShop-1.8.0-SNAPSHOT.jar | tee target/staging-sha256.txt
+      - name: Upload DynaShop PR staging build
+        uses: actions/upload-artifact@v4
+        with:
+          name: RoyalMC-DynaShop-sync-pr1-staging
+          path: |
+            target/ShopGUIPlus-DynaShop-1.8.0-SNAPSHOT.jar
+            target/staging-sha256.txt
+          if-no-files-found: error
+          retention-days: 90
