@@ -399,6 +399,9 @@ public class ShopConfigManager {
                 if ((typeGeneral == DynaShopType.STATIC_STOCK || typeGeneral == DynaShopType.STOCK) && price.getStock() > 0) {
                     plugin.getStorageManager().saveStock(shop.getId(), item.getId(), price.getStock());
                 }
+            } else if (plugin.getStorageManager().synchronizePriceConfiguration(shop.getId(), item.getId())) {
+                // Invalidate only the affected market price, not the entire shop.
+                plugin.invalidatePriceCache(shop.getId(), item.getId(), null);
             }
         });
     }

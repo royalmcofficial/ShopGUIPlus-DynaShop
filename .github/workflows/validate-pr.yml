@@ -1,0 +1,36 @@
+name: Validate pull request
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  compile:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout proposed changes
+        uses: actions/checkout@v4
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: temurin
+          cache: maven
+      - name: Compile and package (no publishing)
+        run: mvn -B --no-transfer-progress -DskipTests package
+      - name: Verify and checksum staging JAR
+        run: |
+          test -s target/ShopGUIPlus-DynaShop-1.8.0-SNAPSHOT.jar
+          sha256sum target/ShopGUIPlus-DynaShop-1.8.0-SNAPSHOT.jar | tee target/staging-sha256.txt
+      - name: Upload DynaShop PR staging build
+        uses: actions/upload-artifact@v4
+        with:
+          name: RoyalMC-DynaShop-sync-pr1-staging
+          path: |
+            target/ShopGUIPlus-DynaShop-1.8.0-SNAPSHOT.jar
+            target/staging-sha256.txt
+          if-no-files-found: error
+          retention-days: 90
